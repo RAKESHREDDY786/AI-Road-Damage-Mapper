@@ -4,14 +4,23 @@
  * AI priority engine rendering, geolocation handling, and report lifecycle.
  */
 
-// Configurable API Base URL to allow flexible local development and deployment
+// ─── Backend URL Configuration ────────────────────────────────────────────────
+// Production backend deployed on Render.com
+// ⚠️  After deploying the backend to Render, replace the placeholder below
+//     with your real Render URL, e.g. "https://ai-road-damage-mapper-backend.onrender.com"
+const RENDER_BACKEND_URL = "https://REPLACE_WITH_YOUR_RENDER_URL.onrender.com";
+
 const API_BASE_URL = (function () {
     const origin = window.location.origin;
     if (origin.includes(":8000")) {
-        return ""; // Relative path when served directly by FastAPI
+        return ""; // Served directly by FastAPI — use relative paths
     }
-    return "http://localhost:8000"; // Default backend location for external dev servers
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+        return "http://localhost:8000"; // Local dev server (e.g. Live Server / Vite)
+    }
+    return RENDER_BACKEND_URL; // Vercel production → Render backend
 })();
+
 
 // Active Global State
 let currentAnalysisResult = null;

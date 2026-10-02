@@ -161,7 +161,7 @@ cp .env.example .env
 
 ### 4. Start FastAPI Server
 ```bash
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 - API Docs: `http://localhost:8000/docs`
 - Health Check: `http://localhost:8000/health`

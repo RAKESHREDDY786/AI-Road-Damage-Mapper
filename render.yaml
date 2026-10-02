@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: ai-road-damage-mapper-backend
+    runtime: python
+    region: oregon
+    plan: free
+
+    # Root of the repository is the project root;
+    # Render will cd into rootDir before running build/start
+    rootDir: backend
+
+    buildCommand: pip install -r requirements.txt
+
+    # Start with gunicorn + uvicorn worker for production
+    startCommand: gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+
+    # Environment variables — set SECRET values in the Render dashboard, not here
+    envVars:
+      - key: FRONTEND_ORIGIN
+        # ⚠️  Replace this placeholder with your actual Vercel URL after deploying
+        value: https://YOUR_VERCEL_APP.vercel.app
+
+      - key: DATABASE_URL
+        # SQLite stored on the persistent disk mounted below
+        value: sqlite:////data/road_damage.db
+
+      - key: MODEL_PATH
+        value: ""
+
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.5"
+
+    # Persistent disk so SQLite database survives deploys (free tier: 1 GB)
+    disk:
+      name: road-damage-data
+      mountPath: /data
+      sizeGB: 1

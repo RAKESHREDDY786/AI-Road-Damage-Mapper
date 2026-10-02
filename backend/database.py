@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -23,11 +23,10 @@ def migrate_db():
     """Applies SQLite column migrations if new columns were added to models."""
     if not DATABASE_URL.startswith("sqlite"):
         return
-    with engine.connect() as conn:
-        # Check existing table columns
+    with engine.begin() as conn:
         try:
-            result = conn.execute(Base.metadata.tables["road_damage_reports"].select().limit(1))
-            columns = result.keys()
+            result = conn.execute(text("PRAGMA table_info(road_damage_reports);"))
+            existing_columns = [row[1] for row in result.fetchall()]
         except Exception:
             return
 
@@ -37,11 +36,12 @@ def migrate_db():
             "priority_reason": "TEXT",
         }
         for col_name, col_type in new_cols.items():
-            if col_name not in columns:
+            if col_name not in existing_columns:
                 try:
-                    conn.execute(f"ALTER TABLE road_damage_reports ADD COLUMN {col_name} {col_type}")
-                except Exception:
-                    pass
+                    conn.execute(text(f"ALTER TABLE road_damage_reports ADD COLUMN {col_name} {col_type};"))
+                except Exception as e:
+                    print(f"Migration notice for {col_name}: {e}")
+
 
 def get_db():
     """Dependency that yields a database session for FastAPI endpoints."""
