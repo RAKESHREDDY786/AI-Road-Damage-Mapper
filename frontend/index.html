@@ -6,10 +6,19 @@
     <title>AI Road Damage Mapper - Intelligent Road Monitoring & GIS Mapping</title>
     <meta name="description" content="AI-assisted road damage detection, mapping and maintenance prioritization platform.">
 
-    <!-- Optional backend API base URL for cross-origin production deployments
-         (e.g. frontend on Vercel + backend on Render). Leave EMPTY when the backend
-         serves this frontend directly (same-origin). Never put secrets here. -->
+    <!-- Backend API base URL for a SPLIT deployment (frontend on Vercel/Netlify,
+         backend on Render). Leave EMPTY when the backend serves this frontend
+         (same-origin, e.g. http://localhost:8000/app or Render's own URL).
+         This placeholder documents the format ONLY — replace it with your real
+         backend origin, e.g. "https://your-backend.onrender.com". It is a PUBLIC
+         endpoint; never put secrets here. -->
     <meta name="api-base-url" content="">
+
+    <!-- Optional write-protection key. Leave EMPTY for local development.
+         For a protected backend, set this to the same value as the backend's
+         API_KEY env var; it is then sent as the X-API-Key header on writes.
+         Visible in the page source, so use as lightweight protection only. -->
+    <meta name="api-key" content="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">

@@ -38,6 +38,24 @@ const API_BASE_URL = (function () {
     return origin;
 })();
 
+// Optional write-protection key for mutating requests (POST/PATCH/DELETE).
+// Leave the <meta name="api-key"> tag EMPTY for local development (no header sent).
+// For a protected backend, set it to the SAME value as the backend's API_KEY env var.
+// NOTE: this value ships inside the HTML, so it is lightweight abuse protection only,
+// NOT a strong secret (see README "Security" section).
+const API_KEY = (function () {
+    const metaTag = document.querySelector('meta[name="api-key"]');
+    return metaTag && metaTag.content ? metaTag.content.trim() : "";
+})();
+
+function buildHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    if (API_KEY) {
+        headers["X-API-Key"] = API_KEY;
+    }
+    return headers;
+}
+
 
 // Active Global State
 let currentAnalysisResult = null;
@@ -337,6 +355,7 @@ async function runImageAnalysis(file) {
     try {
         const res = await fetch(`${API_BASE_URL}/analyze-image`, {
             method: "POST",
+            headers: buildHeaders(), // do NOT set Content-Type: FormData adds it
             body: formData,
         });
 
@@ -522,7 +541,7 @@ async function saveAnalysisToReport() {
     try {
         const res = await fetch(`${API_BASE_URL}/reports`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: buildHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify(payload),
         });
 
@@ -665,7 +684,7 @@ async function createManualReport() {
     try {
         const res = await fetch(`${API_BASE_URL}/reports`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: buildHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify(payload),
         });
 
@@ -686,7 +705,7 @@ async function deleteReportRecord(id) {
     if (!confirm(`Are you sure you want to delete Report #${id}?`)) return;
 
     try {
-        const res = await fetch(`${API_BASE_URL}/reports/${id}`, { method: "DELETE" });
+        const res = await fetch(`${API_BASE_URL}/reports/${id}`, { method: "DELETE", headers: buildHeaders() });
         if (!res.ok) throw new Error("Failed to delete report.");
 
         loadReportsTable();
@@ -958,7 +977,7 @@ function initModalHandlers() {
             try {
                 const res = await fetch(`${API_BASE_URL}/reports/${activeReportInModal.id}`, {
                     method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
+                    headers: buildHeaders({ "Content-Type": "application/json" }),
                     body: JSON.stringify({ status: newStatus }),
                 });
 

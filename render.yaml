@@ -3,7 +3,14 @@ services:
     name: ai-road-damage-mapper-backend
     runtime: python
     region: oregon
-    plan: free
+
+    # ── Persistent disk + SQLite requires a paid instance type ──────────────────
+    # Render's FREE plan does NOT support persistent disks, so the disk below and
+    # the '/data' paths only work on a paid plan.
+    #   • To keep it FREE: remove the `disk:` block and switch to managed Postgres
+    #     (see comments in the envVars section).
+    #   • To keep SQLite persistence: upgrade `plan` to starter (or higher).
+    plan: starter
 
     # Root of the repository is the project root;
     # Render will cd into rootDir before running build/start
@@ -11,18 +18,30 @@ services:
 
     buildCommand: pip install -r requirements.txt
 
-    # Start with gunicorn + uvicorn worker for production
+    # Start with gunicorn + uvicorn worker for production.
+    # Render injects $PORT; the shell expands it into the --bind argument.
     startCommand: gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
 
     # Environment variables — set SECRET values in the Render dashboard, not here
     envVars:
       - key: FRONTEND_ORIGIN
-        # ⚠️  Replace this placeholder with your actual Vercel URL after deploying
-        value: https://YOUR_VERCEL_APP.vercel.app
+        # ⚠️  PLACEHOLDER — replace with your real frontend origin(s) after deploying.
+        #     Comma-separated, no trailing slash. Example:
+        #     https://your-app.vercel.app,http://localhost:8000
+        value: https://YOUR_FRONTEND_APP.example.com
 
       - key: DATABASE_URL
-        # SQLite stored on the persistent disk mounted below
+        # SQLite stored on the persistent disk mounted below.
+        # ⚠️  Only valid when `plan` supports disks (paid). For the FREE plan,
+        #     remove the disk block and use a managed Postgres URL instead, e.g.:
+        #     value: postgresql://USER:PASSWORD@HOST:5432/DBNAME
         value: sqlite:////data/road_damage.db
+
+      - key: UPLOADS_DIR
+        # Store uploaded/annotated images on the persistent disk so they survive
+        # deploys. Only valid with a persistent disk (paid plan). For the free plan,
+        # omit this and switch to external object storage.
+        value: /data/uploads
 
       - key: MODEL_PATH
         value: ""
@@ -30,7 +49,12 @@ services:
       - key: CONFIDENCE_THRESHOLD
         value: "0.5"
 
-    # Persistent disk so SQLite database survives deploys (free tier: 1 GB)
+      - key: API_KEY
+        # ⚠️  Set the REAL secret in the Render dashboard (Secret). Do NOT commit it.
+        #     When set, POST/PATCH/DELETE require the header: X-API-Key: <value>
+        sync: false
+
+    # ⚠️  Persistent disk requires a paid plan (free instances do not support disks).
     disk:
       name: road-damage-data
       mountPath: /data

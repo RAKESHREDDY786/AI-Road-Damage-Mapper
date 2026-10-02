@@ -3,12 +3,12 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func
 from PIL import Image
 
 import models
@@ -31,8 +31,13 @@ app = FastAPI(
 )
 
 # Upload directory setup
+# Configurable so uploads can live on a persistent volume in production
+# (e.g. UPLOADS_DIR=/data/uploads on Render). Defaults to backend/uploads/.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+DEFAULT_UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+
+_uploads_env = os.getenv("UPLOADS_DIR", "").strip()
+UPLOADS_DIR = os.path.abspath(_uploads_env) if _uploads_env else DEFAULT_UPLOADS_DIR
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
@@ -59,6 +64,25 @@ app.add_middleware(
 
 # Mount uploaded files directory
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
+# ─── Optional API-key protection for mutating endpoints ───────────────────────
+# Set API_KEY in the environment (Render dashboard) to require the header
+# `X-API-Key: <value>` on POST/PATCH/DELETE requests. If API_KEY is empty
+# (the local-development default) no key is required. Secrets are never hard-coded.
+API_KEY = os.getenv("API_KEY", "").strip()
+
+
+def require_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """Dependency that enforces the API key for data-changing endpoints when configured."""
+    if not API_KEY:
+        return  # protection disabled (e.g. local development)
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key.",
+            headers={"WWW-Authenticate": "X-API-Key"},
+        )
+
 
 # File Upload Security & Validation
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
@@ -156,6 +180,7 @@ def health_check(db: Session = Depends(get_db)):
     response_model=schemas.ImageAnalysisResponse,
     status_code=status.HTTP_200_OK,
     tags=["AI Analysis"],
+    dependencies=[Depends(require_api_key)],
 )
 def analyze_image(file: UploadFile = File(...)):
     """Accepts an uploaded road image, validates file safety, and runs computer vision inference.
@@ -199,6 +224,7 @@ def analyze_image(file: UploadFile = File(...)):
     response_model=schemas.ReportResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Reports"],
+    dependencies=[Depends(require_api_key)],
 )
 def create_report(report_data: schemas.ReportCreate, db: Session = Depends(get_db)):
     """Create a new road damage report from JSON payload."""
@@ -249,6 +275,7 @@ def create_report(report_data: schemas.ReportCreate, db: Session = Depends(get_d
     response_model=schemas.ReportResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Reports"],
+    dependencies=[Depends(require_api_key)],
 )
 def create_report_with_upload(
     file: Optional[UploadFile] = File(None),
@@ -354,7 +381,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
     return report
 
 
-@app.patch("/reports/{report_id}", response_model=schemas.ReportResponse, tags=["Reports"])
+@app.patch("/reports/{report_id}", response_model=schemas.ReportResponse, tags=["Reports"], dependencies=[Depends(require_api_key)])
 def update_report(
     report_id: int, report_update: schemas.ReportUpdate, db: Session = Depends(get_db)
 ):
@@ -386,7 +413,7 @@ def update_report(
     return report
 
 
-@app.delete("/reports/{report_id}", status_code=status.HTTP_200_OK, tags=["Reports"])
+@app.delete("/reports/{report_id}", status_code=status.HTTP_200_OK, tags=["Reports"], dependencies=[Depends(require_api_key)])
 def delete_report(report_id: int, db: Session = Depends(get_db)):
     """Delete a report from database and clean up associated stored image file."""
     report = db.query(models.RoadDamageReport).filter(models.RoadDamageReport.id == report_id).first()
