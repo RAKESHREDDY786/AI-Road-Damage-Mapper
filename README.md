@@ -93,6 +93,13 @@ MODEL_PATH=models/yolov8_road_damage.pt
 CONFIDENCE_THRESHOLD=0.5
 ```
 
+> **Bundled model note**: this repository ships `models/best.pt`, a lightweight
+> 4-class road-damage model (`longitudinal_crack`, `transverse_crack`,
+> `alligator_crack`, `pothole`). It emits detections at roughly **~0.25**
+> confidence, so the local `.env` sets `CONFIDENCE_THRESHOLD=0.25` — with the
+> code default of `0.5` its real detections would be filtered out. Raise the
+> threshold for stricter, higher-precision output or when swapping in a stronger model.
+
 ### Model Status Behavior
 - **`available`**: Model binary exists at `MODEL_PATH` and loaded successfully. Inference produces bounding boxes and damage predictions.
 - **`not_configured`**: `MODEL_PATH` is empty or the model file does not exist. The server starts normally, returns `model_status: "not_configured"`, empty detections `[]`, and helpful setup instructions. **No fake predictions are ever generated.**
@@ -204,7 +211,7 @@ All variables are optional; sensible local defaults apply. Copy `.env.example` t
 | `DATABASE_URL` | `sqlite:///./road_damage.db` | SQLAlchemy database URL. Production with a disk: `sqlite:////data/road_damage.db`; or a Postgres URL. |
 | `UPLOADS_DIR` | `backend/uploads` | Where uploaded/annotated images are stored. Production with a disk: `/data/uploads`. |
 | `MODEL_PATH` | *(empty)* | Path to YOLO `.pt` / ONNX model. Empty ⇒ no-model mode. |
-| `CONFIDENCE_THRESHOLD` | `0.5` | Minimum detection confidence. |
+| `CONFIDENCE_THRESHOLD` | `0.5` | Minimum detection confidence. The bundled `models/best.pt` ships with `0.25` in `.env` (see note above). |
 | `API_KEY` | *(empty)* | If set, `POST`/`PATCH`/`DELETE` require header `X-API-Key`. Empty ⇒ writes open (local default). |
 
 > `PORT` is provided by the Render runtime and must not be overridden.
@@ -218,6 +225,10 @@ cd backend
 python -m pytest
 ```
 The suite in `backend/tests/` starts a real Uvicorn server in a subprocess and drives it over HTTP using only the standard library (no `httpx` required). It covers health, statistics, report CRUD, validation errors, the image-analysis endpoint (no-model mode + invalid input), and API-key protection.
+
+> **Hermetic by default**: `conftest.py` forces `MODEL_PATH=""` for the default fixtures, so the tests always run in **no-model mode** regardless of any model you configured in your local `.env`. This keeps startup fast and the no-model assertions (`model_status: "not_configured"`, empty detections) deterministic.
+>
+> **Model-mode tests** (`tests/test_model_mode.py`) additionally exercise the real inference path. They run only when weights exist at `models/best.pt` **and** Ultralytics is installed; otherwise they are automatically **skipped**, so the suite stays green on any machine.
 
 ---
 

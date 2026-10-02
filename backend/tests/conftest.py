@@ -97,10 +97,18 @@ class ApiClient:
         return status, self._maybe_json(raw)
 
 
-def _start_server(extra_env=None):
+def _start_server(extra_env=None, ready_timeout: float = 30.0):
     port = _free_port()
     env = os.environ.copy()
     env["API_KEY"] = ""  # default: write-protection off
+
+    # Force hermetic "no-model" mode so the suite behaves identically regardless
+    # of any MODEL_PATH the developer has in their local .env. python-dotenv does
+    # NOT override variables that are already present in the environment, so an
+    # explicit empty value here stops a locally configured model from being
+    # loaded -- keeping startup fast and the no-model assertions deterministic.
+    env["MODEL_PATH"] = ""
+
     if extra_env:
         env.update(extra_env)
     proc = subprocess.Popen(
@@ -111,7 +119,7 @@ def _start_server(extra_env=None):
         stderr=subprocess.DEVNULL,
     )
     base_url = "http://127.0.0.1:%d" % port
-    if not _wait_until_ready(base_url):
+    if not _wait_until_ready(base_url, timeout=ready_timeout):
         proc.terminate()
         raise RuntimeError("Backend server failed to start on %s" % base_url)
     return proc, base_url
@@ -155,3 +163,39 @@ def sample_image_bytes():
     buf = io.BytesIO()
     Image.new("RGB", (64, 64), (128, 128, 128)).save(buf, format="JPEG")
     return buf.getvalue()
+
+
+# ─── Optional real-model ("model mode") fixture ───────────────────────────────
+# The default fixtures above deliberately run in no-model mode. The fixture below
+# exercises the real computer-vision path when weights + the Ultralytics extra are
+# available, and is skipped otherwise so the suite stays green everywhere.
+
+PROJECT_DIR = os.path.dirname(BACKEND_DIR)
+MODEL_CANDIDATE = os.path.join(PROJECT_DIR, "models", "best.pt")
+
+
+def _real_model_available() -> bool:
+    if not os.path.exists(MODEL_CANDIDATE):
+        return False
+    try:
+        import importlib.util
+
+        return importlib.util.find_spec("ultralytics") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@pytest.fixture(scope="session")
+def api_with_model():
+    """Client for a server configured with the repository's real model weights.
+
+    Model loading can take noticeably longer than the no-model path, so the
+    readiness timeout is raised. Skipped when no weights / Ultralytics are found.
+    """
+    if not _real_model_available():
+        pytest.skip("No real model weights or Ultralytics installed; skipping model-mode tests.")
+    proc, base_url = _start_server({"MODEL_PATH": MODEL_CANDIDATE}, ready_timeout=120.0)
+    try:
+        yield ApiClient(base_url)
+    finally:
+        _stop_server(proc)

@@ -58,5 +58,5 @@ class RoadDamageReport(Base):
             "description": self.description,
             "priority_score": self.priority_score,
             "priority_level": self.priority_level,
-            "priority_reason": self.priority_reason,
+            "priority_reason": self.priority_reason,    
         }

@@ -14,11 +14,13 @@ logger = logging.getLogger("detection_service")
 
 # Class mapping mechanism: maps model raw class strings or IDs to conceptual application damage types
 DEFAULT_CLASS_MAPPING: Dict[str, str] = {
-    # Numerical ID string mappings (common in YOLO RDD2020 / RDD2022 models)
-    "0": models.DamageType.POTHOLE.value,
-    "1": models.DamageType.LONGITUDINAL_CRACK.value,
-    "2": models.DamageType.TRANSVERSE_CRACK.value,
-    "3": models.DamageType.ALLIGATOR_CRACK.value,
+    # Numerical class-index mappings. These follow the standard RDD2022 ordering
+    # (0=longitudinal crack, 1=transverse crack, 2=alligator crack, 3=pothole),
+    # which matches the class names of the bundled models/best.pt weights.
+    "0": models.DamageType.LONGITUDINAL_CRACK.value,
+    "1": models.DamageType.TRANSVERSE_CRACK.value,
+    "2": models.DamageType.ALLIGATOR_CRACK.value,
+    "3": models.DamageType.POTHOLE.value,
     "4": models.DamageType.OTHER.value,
     
     # Textual class label mappings
