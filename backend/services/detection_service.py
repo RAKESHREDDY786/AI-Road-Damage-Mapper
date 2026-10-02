@@ -131,6 +131,7 @@ class DetectionService:
             return {
                 "success": True,
                 "model_status": self.model_status,
+                "is_model_active": False,
                 "detections": [],
                 "overall_severity": models.SeverityLevel.LOW.value,
                 "annotated_image": None,
@@ -145,6 +146,7 @@ class DetectionService:
             return {
                 "success": False,
                 "model_status": self.model_status,
+                "is_model_active": False,
                 "detections": [],
                 "overall_severity": models.SeverityLevel.LOW.value,
                 "annotated_image": None,
@@ -189,6 +191,7 @@ class DetectionService:
                             "bounding_box": bbox,
                             "severity": severity_info["level"],
                             "severity_reason": severity_info["reason"],
+                            "area_ratio": severity_info.get("area_ratio", 0.0),
                         })
             except Exception as e:
                 logger.error(f"Inference error: {e}")
@@ -206,6 +209,7 @@ class DetectionService:
         return {
             "success": True,
             "model_status": self.model_status,
+            "is_model_active": True,
             "detections": detections,
             "overall_severity": overall_severity,
             "annotated_image": annotated_relative_path,

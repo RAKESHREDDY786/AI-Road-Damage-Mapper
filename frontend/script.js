@@ -5,20 +5,37 @@
  */
 
 // ─── Backend URL Configuration ────────────────────────────────────────────────
-// Production backend deployed on Render.com
-// ⚠️  After deploying the backend to Render, replace the placeholder below
-//     with your real Render URL, e.g. "https://ai-road-damage-mapper-backend.onrender.com"
-const RENDER_BACKEND_URL = "https://REPLACE_WITH_YOUR_RENDER_URL.onrender.com";
+// Backend URL resolution order:
+//   1. <meta name="api-base-url"> in index.html (explicit cross-origin URL)
+//   2. Opened from disk (file://) or a local dev server -> local FastAPI backend
+//   3. Otherwise -> same origin (FastAPI serving this SPA, local or production)
+// No secrets belong here; the backend URL is a public endpoint.
 
 const API_BASE_URL = (function () {
+    // 1) Explicit override for cross-origin production (e.g. Vercel -> Render)
+    const metaTag = document.querySelector('meta[name="api-base-url"]');
+    const metaValue = metaTag && metaTag.content ? metaTag.content.trim() : "";
+    if (metaValue) {
+        return metaValue.replace(/\/+$/, ""); // strip trailing slashes
+    }
+
+    const protocol = window.location.protocol;
+    const port = window.location.port;
     const origin = window.location.origin;
-    if (origin.includes(":8000")) {
-        return ""; // Served directly by FastAPI — use relative paths
+
+    // 2a) Opened directly from the filesystem (double-clicked index.html)
+    if (protocol === "file:") {
+        return "http://localhost:8000";
     }
-    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
-        return "http://localhost:8000"; // Local dev server (e.g. Live Server / Vite)
+
+    // 2b) Local development servers (Live Server / Vite / CRA, etc.)
+    const DEV_SERVER_PORTS = ["3000", "4200", "5173", "5500", "8080"];
+    if (DEV_SERVER_PORTS.includes(port)) {
+        return "http://localhost:8000";
     }
-    return RENDER_BACKEND_URL; // Vercel production → Render backend
+
+    // 3) Served by FastAPI itself (local or production) -> same origin, no CORS
+    return origin;
 })();
 
 

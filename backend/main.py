@@ -44,9 +44,14 @@ raw_origins = os.getenv(
 )
 allowed_origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
+# Allow any local development origin (Live Server / Vite / CRA on arbitrary ports).
+# This regex intentionally matches ONLY localhost/127.0.0.1 so it is safe in production.
+LOCAL_DEV_ORIGIN_REGEX = r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if allowed_origins else ["*"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=LOCAL_DEV_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -480,7 +485,10 @@ def get_analytics(db: Session = Depends(get_db)):
     time_series = []
     if stats.total_reports > 0:
         daily_counts = (
-            db.query(cast(models.RoadDamageReport.timestamp, Date).label("report_date"), func.count(models.RoadDamageReport.id))
+            db.query(
+                func.date(models.RoadDamageReport.timestamp).label("report_date"),
+                func.count(models.RoadDamageReport.id),
+            )
             .group_by("report_date")
             .order_by("report_date")
             .all()

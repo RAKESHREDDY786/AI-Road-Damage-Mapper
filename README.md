@@ -153,6 +153,9 @@ source venv/bin/activate
 cd backend
 pip install -r requirements.txt
 ```
+> Optional: to run a *real* road-damage model, also install the AI extras
+> (`pip install -r requirements-ai.txt`) and place your weights in `models/`.
+> Without them the app runs safely in no-model mode and never fabricates results.
 
 ### 3. Configure `.env`
 ```bash
@@ -161,14 +164,14 @@ cp .env.example .env
 
 ### 4. Start FastAPI Server
 ```bash
-uvicorn main:app --reload --host 127.0.0.1 --port 8001
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 - API Docs: `http://localhost:8000/docs`
 - Health Check: `http://localhost:8000/health`
 
 ### 5. Open Frontend UI
-- Direct Browser URL: Open `http://localhost:8000/` in browser.
-- Double-click `frontend/index.html`.
+- Direct Browser URL (FastAPI serves the SPA): `http://localhost:8000/app`
+- Double-click `frontend/index.html` (API base auto-resolves to `http://localhost:8000`).
 
 ---
 

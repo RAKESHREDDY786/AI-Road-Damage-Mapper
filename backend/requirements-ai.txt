@@ -1,0 +1,15 @@
+# ─── Optional AI / Computer-Vision dependencies ───────────────────────────────
+# These power REAL model inference in backend/services/detection_service.py.
+# They are intentionally kept OUT of the default requirements.txt because they
+# pull in large binary wheels (torch, opencv) that are unnecessary for the
+# core app and can exceed small/free deployment tiers.
+#
+# Install ONLY when you have model weights placed in models/ and MODEL_PATH set:
+#   pip install -r requirements.txt -r requirements-ai.txt
+#
+# The application runs safely WITHOUT these packages in "no-model" mode
+# (model_status: "not_configured", is_model_active: false) and NEVER fabricates
+# detections.
+ultralytics>=8.1.0
+opencv-python-headless>=4.9.0
+numpy>=1.24.0

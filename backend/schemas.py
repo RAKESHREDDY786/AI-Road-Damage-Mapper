@@ -109,6 +109,9 @@ class DetectionItem(BaseModel):
 class ImageAnalysisResponse(BaseModel):
     success: bool
     model_status: str
+    # Explicit flag so clients can unambiguously distinguish real model inference
+    # (True) from the safe no-model / demo fallback (False).
+    is_model_active: bool = False
     detections: List[DetectionItem]
     overall_severity: str
     priority_score: Optional[float] = None
