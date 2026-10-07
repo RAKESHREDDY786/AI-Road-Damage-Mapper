@@ -25,13 +25,13 @@ const API_BASE_URL = (function () {
 
     // 2a) Opened directly from the filesystem (double-clicked index.html)
     if (protocol === "file:") {
-        return "http://localhost:8000";
+        return "http://127.0.0.1:8000";
     }
 
     // 2b) Local development servers (Live Server / Vite / CRA, etc.)
     const DEV_SERVER_PORTS = ["3000", "4200", "5173", "5500", "8080"];
     if (DEV_SERVER_PORTS.includes(port)) {
-        return "http://localhost:8000";
+        return "http://127.0.0.1:8000";
     }
 
     // 3) Served by FastAPI itself (local or production) -> same origin, no CORS
@@ -59,6 +59,7 @@ function buildHeaders(extra) {
 
 // Active Global State
 let currentAnalysisResult = null;
+let selectedAnalysisFile = null;
 let gisMapInstance = null;
 let mapMarkersList = [];
 let activeReportInModal = null;
@@ -95,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
    1. NAVIGATION & TAB SWITCHING
    ========================================================================== */
 function initNavigation() {
+
     const navButtons = document.querySelectorAll(".nav-btn");
     const tabPanes = document.querySelectorAll(".tab-pane");
 
@@ -167,7 +169,7 @@ async function checkHealth() {
                 modelBadge.className = "badge badge-success";
                 modelBadge.textContent = "AI Model: Active";
                 if (modelCalloutText) {
-                    modelCalloutText.innerHTML = "<strong>AI Detection Engine Ready:</strong> Legitimate computer vision model loaded. Full bounding box localization & damage classification active.";
+                    modelCalloutText.innerHTML = "<strong>AI model loaded:</strong> Detection results are estimates and may miss or misclassify damage. Have a qualified person verify findings before maintenance decisions.";
                 }
             } else if (data.model_status === "not_configured") {
                 modelBadge.className = "badge badge-warning";
@@ -245,8 +247,8 @@ function renderDashboardTable(reports) {
         const imgMarkup = r.annotated_image_path
             ? `<img src="${API_BASE_URL}/${r.annotated_image_path}" class="table-thumb" alt="Annotated">`
             : r.image_path
-            ? `<img src="${API_BASE_URL}/${r.image_path}" class="table-thumb" alt="Original">`
-            : `<span class="badge">No image</span>`;
+                ? `<img src="${API_BASE_URL}/${r.image_path}" class="table-thumb" alt="Original">`
+                : `<span class="badge">No image</span>`;
 
         const locText = (r.latitude !== null && r.longitude !== null)
             ? `📍 ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`
@@ -278,6 +280,7 @@ function renderDashboardTable(reports) {
 function initImageAnalysis() {
     const dropZone = document.getElementById("drop-zone");
     const fileInput = document.getElementById("analyze-file-input");
+    console.log("FILE INPUT FOUND:", fileInput);
     const form = document.getElementById("analyze-form");
     const saveForm = document.getElementById("save-analysis-form");
 
@@ -298,22 +301,38 @@ function initImageAnalysis() {
         });
         fileInput.addEventListener("change", (e) => {
             if (e.target.files.length > 0) {
-                handleImageSelection(e.target.files[0]);
+                selectedAnalysisFile = e.target.files[0];
+                handleImageSelection(selectedAnalysisFile);
             }
         });
     }
 
     if (form) {
+        const analyzeButton = document.getElementById("analyze-submit-btn");
+
+        analyzeButton.addEventListener("click", () => {
+            console.log("🔥 ANALYZE BUTTON CLICK DETECTED");
+        });
         form.addEventListener("submit", async (e) => {
+
             e.preventDefault();
+
             if (!fileInput.files || fileInput.files.length === 0) {
-                showMsg("analyze-response-msg", "Please select a road image file first.", false);
+                showMsg(
+                    "analyze-response-msg",
+                    "Please select a road image file first.",
+                    false
+                );
                 return;
             }
-            await runImageAnalysis(fileInput.files[0]);
+
+            const selectedFile = fileInput.files[0];
+
+            console.log("ANALYZE FORM SUBMITTED:", selectedFile.name);
+
+            await runImageAnalysis(selectedFile);
         });
     }
-
     if (saveForm) {
         saveForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -337,6 +356,7 @@ function handleImageSelection(file) {
 }
 
 async function runImageAnalysis(file) {
+    console.log("FILE SENT FOR ANALYSIS:", file.name);
     const submitBtn = document.getElementById("analyze-submit-btn");
     const spinner = document.getElementById("analyze-btn-spinner");
     const btnText = document.getElementById("analyze-btn-text");
@@ -388,8 +408,14 @@ function renderAnalysisResults(data) {
     // Images
     const origImg = document.getElementById("res-original-img");
     const annotImg = document.getElementById("res-annotated-img");
-    origImg.src = `${API_BASE_URL}/${data.original_image}`;
-    annotImg.src = data.annotated_image ? `${API_BASE_URL}/${data.annotated_image}` : origImg.src;
+    if (origImg) {
+        origImg.src = `${API_BASE_URL}/${data.original_image}`;
+    }
+    if (annotImg) {
+        annotImg.src = data.annotated_image
+            ? `${API_BASE_URL}/${data.annotated_image}`
+            : (origImg ? origImg.src : "");
+    }
 
     // AI Priority Card Preview
     const pScore = document.getElementById("res-priority-score");
@@ -633,8 +659,8 @@ function renderAllReportsTable(reports) {
         const imgMarkup = r.annotated_image_path
             ? `<img src="${API_BASE_URL}/${r.annotated_image_path}" class="table-thumb" alt="Annotated">`
             : r.image_path
-            ? `<img src="${API_BASE_URL}/${r.image_path}" class="table-thumb" alt="Original">`
-            : `<span class="badge">No Image</span>`;
+                ? `<img src="${API_BASE_URL}/${r.image_path}" class="table-thumb" alt="Original">`
+                : `<span class="badge">No Image</span>`;
 
         const locText = (r.latitude !== null && r.longitude !== null)
             ? `📍 ${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`
@@ -764,15 +790,23 @@ async function refreshGISMap() {
     const emptyNotice = document.getElementById("map-empty-state-notice");
 
     try {
-        const res = await fetch(`${API_BASE_URL}/reports`);
+        const [res, statsRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/reports/map`),
+            fetch(`${API_BASE_URL}/statistics`),
+        ]);
         if (!res.ok) return;
 
         const reports = await res.json();
+        const stats = statsRes.ok ? await statsRes.json() : null;
         const geotagged = reports.filter((r) => r.latitude !== null && r.longitude !== null);
-        const unmapped = reports.length - geotagged.length;
+        const unmapped = stats ? Math.max(0, stats.total_reports - geotagged.length) : null;
 
         if (pinBadge) pinBadge.textContent = `${geotagged.length} Mapped Pins`;
-        if (noLocBadge) noLocBadge.textContent = `${unmapped} Location Unavailable`;
+        if (noLocBadge) {
+            noLocBadge.textContent = unmapped === null
+                ? "Location count unavailable"
+                : `${unmapped} Location Unavailable`;
+        }
 
         if (geotagged.length === 0) {
             if (emptyNotice) emptyNotice.style.display = "block";
@@ -809,7 +843,9 @@ async function refreshGISMap() {
             mapMarkersList.push(customCircleMarker);
         });
 
-        if (mapMarkersList.length > 0) {
+        if (mapMarkersList.length === 1) {
+            gisMapInstance.setView(mapMarkersList[0].getLatLng(), 15);
+        } else if (mapMarkersList.length > 1) {
             const group = L.featureGroup(mapMarkersList);
             gisMapInstance.fitBounds(group.getBounds().pad(0.2));
         }

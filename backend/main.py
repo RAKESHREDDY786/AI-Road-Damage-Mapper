@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from PIL import Image
 
-import models
-import schemas
-from database import engine, get_db, migrate_db
-from services.detection_service import detection_service
-from services.priority_service import calculate_priority
+from . import models
+from . import schemas
+from .database import engine, get_db, migrate_db
+from .services.detection_service import detection_service
+from .services.priority_service import calculate_priority
 
 # Load environment variables
 load_dotenv()
@@ -145,6 +145,10 @@ def validate_and_save_image(file: UploadFile) -> str:
     return f"uploads/{unique_filename}"
 
 
+def get_upload_file_path(relative_path: str) -> str:
+    return os.path.join(UPLOADS_DIR, os.path.basename(relative_path))
+
+
 # Base API Routes
 @app.get("/", tags=["System"])
 def read_root():
@@ -189,7 +193,7 @@ def analyze_image(file: UploadFile = File(...)):
     Does NOT fabricate results if no model is configured or if no damage is detected.
     """
     saved_relative_path = validate_and_save_image(file)
-    full_image_path = os.path.join(BASE_DIR, saved_relative_path)
+    full_image_path = get_upload_file_path(saved_relative_path)
 
     # Run computer vision detection service
     analysis_result, annotated_relative_path = detection_service.analyze_image(
@@ -396,17 +400,18 @@ def update_report(
     for key, value in update_data.items():
         setattr(report, key, value)
 
-    # Re-evaluate priority if severity, damage_type, or location changed
-    p_res = calculate_priority(
-        severity=report.severity,
-        damage_type=report.damage_type,
-        confidence=report.confidence,
-        latitude=report.latitude,
-        longitude=report.longitude,
-    )
-    report.priority_score = p_res["priority_score"]
-    report.priority_level = p_res["priority_level"]
-    report.priority_reason = p_res["priority_reason"]
+    priority_inputs = {"severity", "damage_type", "confidence", "latitude", "longitude"}
+    if priority_inputs.intersection(update_data):
+        p_res = calculate_priority(
+            severity=report.severity,
+            damage_type=report.damage_type,
+            confidence=report.confidence,
+            latitude=report.latitude,
+            longitude=report.longitude,
+        )
+        report.priority_score = p_res["priority_score"]
+        report.priority_level = p_res["priority_level"]
+        report.priority_reason = p_res["priority_reason"]
 
     db.commit()
     db.refresh(report)
@@ -425,7 +430,7 @@ def delete_report(report_id: int, db: Session = Depends(get_db)):
     # Delete physical image files if present
     for path_attr in [report.image_path, report.annotated_image_path]:
         if path_attr:
-            full_path = os.path.join(BASE_DIR, path_attr)
+            full_path = get_upload_file_path(path_attr)
             if os.path.exists(full_path):
                 try:
                     os.remove(full_path)

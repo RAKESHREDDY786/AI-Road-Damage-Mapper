@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, Text
-from database import Base
+from .database import Base
 
 
 class DamageType(str, enum.Enum):

@@ -9,6 +9,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -17,6 +18,7 @@ import uuid
 import pytest
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_DIR = os.path.dirname(BACKEND_DIR)
 
 
 def _free_port() -> int:
@@ -97,10 +99,24 @@ class ApiClient:
         return status, self._maybe_json(raw)
 
 
+def _remove_test_database(database_path: str) -> None:
+    for attempt in range(10):
+        try:
+            os.remove(database_path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.1)
+
+
 def _start_server(extra_env=None, ready_timeout: float = 30.0):
     port = _free_port()
+    database_fd, database_path = tempfile.mkstemp(prefix="road-mapper-test-", suffix=".db")
+    os.close(database_fd)
     env = os.environ.copy()
     env["API_KEY"] = ""  # default: write-protection off
+    env["DATABASE_URL"] = "sqlite:///" + database_path.replace("\\", "/")
 
     # Force hermetic "no-model" mode so the suite behaves identically regardless
     # of any MODEL_PATH the developer has in their local .env. python-dotenv does
@@ -112,45 +128,52 @@ def _start_server(extra_env=None, ready_timeout: float = 30.0):
     if extra_env:
         env.update(extra_env)
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port)],
-        cwd=BACKEND_DIR,
+        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", str(port)],
+        cwd=PROJECT_DIR,
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     base_url = "http://127.0.0.1:%d" % port
     if not _wait_until_ready(base_url, timeout=ready_timeout):
-        proc.terminate()
+        _stop_server(proc)
+        if os.path.exists(database_path):
+            _remove_test_database(database_path)
         raise RuntimeError("Backend server failed to start on %s" % base_url)
-    return proc, base_url
+    return proc, base_url, database_path
 
 
 def _stop_server(proc):
     proc.terminate()
     try:
         proc.wait(timeout=10)
-    except Exception:
+    except subprocess.TimeoutExpired:
         proc.kill()
+        proc.wait(timeout=10)
 
 
 @pytest.fixture(scope="session")
 def api():
     """Client for a server running with the default local configuration."""
-    proc, base_url = _start_server()
+    proc, base_url, database_path = _start_server()
     try:
         yield ApiClient(base_url)
     finally:
         _stop_server(proc)
+        if os.path.exists(database_path):
+            _remove_test_database(database_path)
 
 
 @pytest.fixture(scope="session")
 def api_secure():
     """Client for a server running with API_KEY protection enabled."""
-    proc, base_url = _start_server({"API_KEY": "test-secret-key"})
+    proc, base_url, database_path = _start_server({"API_KEY": "test-secret-key"})
     try:
         yield ApiClient(base_url)
     finally:
         _stop_server(proc)
+        if os.path.exists(database_path):
+            _remove_test_database(database_path)
 
 
 @pytest.fixture(scope="session")
@@ -170,7 +193,6 @@ def sample_image_bytes():
 # exercises the real computer-vision path when weights + the Ultralytics extra are
 # available, and is skipped otherwise so the suite stays green everywhere.
 
-PROJECT_DIR = os.path.dirname(BACKEND_DIR)
 MODEL_CANDIDATE = os.path.join(PROJECT_DIR, "models", "best.pt")
 
 
@@ -194,8 +216,10 @@ def api_with_model():
     """
     if not _real_model_available():
         pytest.skip("No real model weights or Ultralytics installed; skipping model-mode tests.")
-    proc, base_url = _start_server({"MODEL_PATH": MODEL_CANDIDATE}, ready_timeout=120.0)
+    proc, base_url, database_path = _start_server({"MODEL_PATH": MODEL_CANDIDATE}, ready_timeout=120.0)
     try:
         yield ApiClient(base_url)
     finally:
         _stop_server(proc)
+        if os.path.exists(database_path):
+            _remove_test_database(database_path)

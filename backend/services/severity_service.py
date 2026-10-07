@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-import models
+from .. import models
 
 
 def calculate_severity(

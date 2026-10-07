@@ -7,7 +7,7 @@ DISCLAIMER: AI-assisted maintenance priority estimate. Results are for decision 
 """
 
 from typing import Dict, Any, Optional
-import models
+from .. import models
 
 
 DISCLAIMER_TEXT = (

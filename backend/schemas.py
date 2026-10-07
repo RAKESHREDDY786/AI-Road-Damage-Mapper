@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, ConfigDict
-from models import DamageType, SeverityLevel, ReportStatus
+from .models import DamageType, SeverityLevel, ReportStatus
 
 
 class ReportBase(BaseModel):

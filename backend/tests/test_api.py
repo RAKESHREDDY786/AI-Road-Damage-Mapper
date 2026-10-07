@@ -28,8 +28,12 @@ def test_reports_crud_roundtrip(api):
     payload = {
         "damage_type": "POTHOLE",
         "severity": "HIGH",
+        "confidence": 0.95,
         "latitude": 10.0,
         "longitude": 20.0,
+        "priority_score": 97.0,
+        "priority_level": "HIGH",
+        "priority_reason": "stored analysis score",
         "description": "pytest CRUD record",
     }
     status, data = api.post_json("/reports", payload)
@@ -47,6 +51,8 @@ def test_reports_crud_roundtrip(api):
         status, patched = api.patch_json("/reports/%d" % report_id, {"status": "RESOLVED"})
         assert status == 200
         assert patched["status"] == "RESOLVED"
+        assert patched["priority_score"] == data["priority_score"]
+        assert patched["priority_reason"] == data["priority_reason"]
 
         status, listed = api.get("/reports?limit=500")
         assert status == 200

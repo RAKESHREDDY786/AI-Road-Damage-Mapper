@@ -4,23 +4,23 @@ services:
     runtime: python
     region: oregon
 
-    # ── Persistent disk + SQLite requires a paid instance type ──────────────────
+    # ── Persistent disk + model inference requires a paid compute plan ──────────
     # Render's FREE plan does NOT support persistent disks, so the disk below and
-    # the '/data' paths only work on a paid plan.
-    #   • To keep it FREE: remove the `disk:` block and switch to managed Postgres
-    #     (see comments in the envVars section).
-    #   • To keep SQLite persistence: upgrade `plan` to starter (or higher).
-    plan: starter
+    # the '/data' paths only work on a paid plan. PyTorch inference also needs
+    # more memory than the 512 MB starter tier provides reliably.
+    #   • To keep it FREE: remove the `disk:` block, disable model inference, and
+    #     switch to managed Postgres (see comments in the envVars section).
+    #   • This 1 CPU / 2 GB plan supports the bundled CPU inference model.
+    plan: 1c-2g
 
-    # Root of the repository is the project root;
-    # Render will cd into rootDir before running build/start
-    rootDir: backend
+    # Run from the repository root so package imports use backend.main.
+    rootDir: .
 
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r backend/requirements.txt -r backend/requirements-ai.txt
 
     # Start with gunicorn + uvicorn worker for production.
     # Render injects $PORT; the shell expands it into the --bind argument.
-    startCommand: gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    startCommand: gunicorn backend.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
 
     # Environment variables — set SECRET values in the Render dashboard, not here
     envVars:
@@ -44,10 +44,10 @@ services:
         value: /data/uploads
 
       - key: MODEL_PATH
-        value: ""
+        value: models/best.pt
 
       - key: CONFIDENCE_THRESHOLD
-        value: "0.5"
+        value: "0.25"
 
       - key: API_KEY
         # ⚠️  Set the REAL secret in the Render dashboard (Secret). Do NOT commit it.

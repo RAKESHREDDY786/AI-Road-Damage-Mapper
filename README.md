@@ -175,8 +175,7 @@ source venv/bin/activate
 
 ### 2. Install Dependencies
 ```bash
-cd backend
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 > Optional: to run a *real* road-damage model, also install the AI extras
 > (`pip install -r requirements-ai.txt`) and place your weights in `models/`.
@@ -189,7 +188,7 @@ cp .env.example .env
 
 ### 4. Start FastAPI Server
 ```bash
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 - API Docs: `http://localhost:8000/docs`
 - Health Check: `http://localhost:8000/health`
@@ -221,8 +220,7 @@ All variables are optional; sensible local defaults apply. Copy `.env.example` t
 ## Running the Tests
 
 ```bash
-cd backend
-python -m pytest
+python -m pytest -c backend/pytest.ini backend/tests
 ```
 The suite in `backend/tests/` starts a real Uvicorn server in a subprocess and drives it over HTTP using only the standard library (no `httpx` required). It covers health, statistics, report CRUD, validation errors, the image-analysis endpoint (no-model mode + invalid input), and API-key protection.
 
@@ -251,10 +249,10 @@ If `MODEL_PATH` is unset or the file is missing, the server still starts and eve
 ## Deployment
 
 ### Backend on Render
-`render.yaml` defines a Python web service (`rootDir: backend`) that installs `requirements.txt` and starts Gunicorn with a Uvicorn worker (`--bind 0.0.0.0:$PORT`).
+`render.yaml` defines a Python web service from the repository root, installs `backend/requirements.txt`, and starts `backend.main:app` with a Gunicorn Uvicorn worker (`--bind 0.0.0.0:$PORT`).
 
 - **Persistent storage**: SQLite plus the `/data` disk requires a paid instance type; the blueprint uses `plan: starter`. Free instances do **not** support disks — for the free tier remove the `disk:` block and use a managed Postgres `DATABASE_URL` (comments in `render.yaml` show how).
-- **Environment**: set `FRONTEND_ORIGIN` to your deployed frontend origin and set `API_KEY` as a Render **secret**. `render.yaml` uses clearly-labelled placeholders and never contains real secrets.
+- **Environment**: set `FRONTEND_ORIGIN` to your deployed frontend origin. The blueprint installs the AI extras, loads the bundled `models/best.pt`, and uses the 1 CPU / 2 GB plan for inference. `render.yaml` uses clearly-labelled placeholders and never contains real secrets.
 - **Uploads**: `UPLOADS_DIR=/data/uploads` keeps images on the same persistent disk as the database so they survive redeploys.
 
 ### Frontend
@@ -264,7 +262,7 @@ If `MODEL_PATH` is unset or the file is missing, the server still starts and eve
 ---
 
 ## Storage & Database Considerations
-- Default database is SQLite at `backend/road_damage.db` (git-ignored). `migrate_db()` adds newly-introduced columns on startup.
+- Default database is SQLite at `road_damage.db` relative to the project-root working directory (git-ignored). `migrate_db()` adds newly-introduced columns on startup.
 - Uploaded and annotated images live in `UPLOADS_DIR` (default `backend/uploads/`, git-ignored).
 - On an ephemeral filesystem (e.g. Render free tier) images and SQLite do not survive redeploys — use a persistent disk or managed database/object storage in production.
 
@@ -280,5 +278,5 @@ If `MODEL_PATH` is unset or the file is missing, the server still starts and eve
 
 ## Notes & Limitations
 - Severity and priority scores are AI-assisted heuristics for triage; they do **not** replace certified civil-engineering inspection.
-- Real detection requires you to supply model weights; none are bundled (to avoid shipping large binaries).
+- `models/best.pt` is included in this repository. Render installs the optional AI dependencies and configures this model at a 0.25 confidence threshold. This requires the configured 1 CPU / 2 GB Render plan; a 512 MB plan may run out of memory during inference.
 - GIS map tiles are loaded from OpenStreetMap and require internet access in the browser.

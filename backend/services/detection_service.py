@@ -5,8 +5,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
 
-import models
-from services.severity_service import calculate_severity, calculate_overall_severity
+from .. import models
+from .severity_service import calculate_severity, calculate_overall_severity
 
 load_dotenv()
 
@@ -84,6 +84,7 @@ class DetectionService:
             logger.info(f"Loading YOLO model from {abs_model_path}...")
             self.model = YOLO(abs_model_path)
             self.model_type = "ultralytics_yolo"
+        
             self.model_status = "available"
             self.status_detail = f"Model loaded successfully from '{self.model_path}' (Ultralytics YOLO)."
             logger.info("DetectionService: Model loaded successfully.")

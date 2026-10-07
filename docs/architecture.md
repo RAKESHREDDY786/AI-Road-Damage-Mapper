@@ -95,7 +95,7 @@ This document details the system architecture, component responsibilities, the c
 
 ## 4. GIS, Analytics & Report Lifecycle (Stage 3)
 
-- **GIS Map (`frontend/script.js`, Leaflet + OpenStreetMap)**: Renders geotagged reports as severity/priority-coloured circle markers with popups that open the report detail modal. Backed by `GET /reports` (client-side filtering) and `GET /reports/map`.
+- **GIS Map (`frontend/script.js`, Leaflet + OpenStreetMap)**: Renders all geotagged reports as severity/priority-coloured circle markers with popups that open the report detail modal. Backed by `GET /reports/map`.
 - **Analytics (`Chart.js` + `GET /analytics`)**: Damage-type, severity, priority, and workflow-status distributions plus a reports-over-time series. When the database is empty the UI shows an explicit empty state.
 - **Report Lifecycle**: Reports can be created from an analysis result or manually, filtered, inspected, transitioned through `NEW → REVIEWED → RESOLVED`, and deleted (associated image files are removed with the row).
 - **Workflow Status**: `PATCH /reports/{id}` re-evaluates the priority score after updates.
@@ -104,7 +104,7 @@ This document details the system architecture, component responsibilities, the c
 
 ## 5. Deployment Topology (Stage 4)
 
-- **Backend (Render)**: `render.yaml` provisions a Python web service from `rootDir: backend`, installs `requirements.txt`, and runs Gunicorn with a Uvicorn worker bound to `0.0.0.0:$PORT`.
+- **Backend (Render)**: `render.yaml` provisions a Python web service from the repository root, installs core and AI dependencies, loads `models/best.pt`, and runs `backend.main:app` with Gunicorn and a Uvicorn worker on the 1 CPU / 2 GB plan.
 - **Persistence**: SQLite and uploaded images live on a Render persistent disk mounted at `/data` (`DATABASE_URL=sqlite:////data/road_damage.db`, `UPLOADS_DIR=/data/uploads`). Disks require a paid instance type; the free tier instead uses a managed database (e.g. Postgres) and external object storage.
 - **Frontend**: Either served same-origin by the backend (`/app`) or deployed separately with the backend origin supplied via the `<meta name="api-base-url">` tag; that origin is then added to `FRONTEND_ORIGIN`.
 - **Local development is unaffected**: defaults fall back to `backend/uploads/` and `sqlite:///./road_damage.db`.
